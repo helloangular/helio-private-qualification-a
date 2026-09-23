@@ -1,0 +1,15 @@
+name: Helio webhook smoke
+run-name: ${{ inputs.correlation_id || github.run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      correlation_id:
+        description: Helio QA correlation token
+        required: false
+        type: string
+jobs:
+  receipt:
+    runs-on: [self-hosted, Linux, X64, helio-private-qa]
+    steps:
+      - name: Prove runner execution
+        run: printf 'webhook smoke complete\n'
