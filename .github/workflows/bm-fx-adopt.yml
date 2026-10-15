@@ -1,0 +1,30 @@
+# BlueMatrix follow-up fixture (fx stream, 14 Oct 2026): a workflow started in GitHub (push to branch bm-fx-adopt), so
+# that Helio can adopt the run as an observe-only release (module 7 adoption) and a GitHub actor can cancel it outside
+# Helio (BM-RUN-27, BM-RUN-47). The job only waits; nothing is deployed.
+name: bm-fx-adopt
+run-name: bm-fx-adopt ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - bm-fx-adopt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bm-fx-adopt-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  wait:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: bm-fx-adopt-production
+    steps:
+      - name: Wait to be observed or cancelled
+        shell: bash
+        run: |
+          echo "adoptable run for ${GITHUB_SHA}"
+          sleep 600
