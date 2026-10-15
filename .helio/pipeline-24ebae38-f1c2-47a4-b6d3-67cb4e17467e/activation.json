@@ -1,0 +1,13 @@
+{
+  "schema" : 3,
+  "repository" : "jquantum-helio-qa/helio-private-qualification-a",
+  "pipeline" : "pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e",
+  "activated_at" : "2026-10-15 06:06:39.443789",
+  "key_id" : "b0f8d760030be77a",
+  "signature" : "w0vkWnn49Fta81oHox7bRj6qq89jssXZ9x2vq7GQOLy2MBpV61akWZ0UwKJZceglBqjiuXBji3R700wNcI4qBw==",
+  "redeploy_workflow" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-redeploy.yml",
+  "workflow" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-deploy.yml",
+  "manifest_id" : "mf_2bedf4003eefb160",
+  "version" : 3,
+  "manifest_sha256" : "2bedf4003eefb16093fd61176da4305d8c42247a68007edaaf7f6800d94f4f72"
+}
