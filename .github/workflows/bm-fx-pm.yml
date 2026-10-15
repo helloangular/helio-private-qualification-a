@@ -1,0 +1,149 @@
+# BlueMatrix follow-up fixture (fx stream, 14 Oct 2026): a reversible, provider-managed (single-run) workflow with
+# release-version switches for engineering-prepared variants. GitHub-hosted runners (never the shared self-hosted ones).
+#
+# Forward run: build -> production (environment bm-fx-pm-production; records one GitHub deployment carrying the
+# managed evidence contract: digest, URI, rollback workflow, workflow revision) -> verify (a later job).
+# Rollback run (deployment_only=true): no build; production re-installs the pinned artifact_digest; no verify.
+#
+# Variants are chosen by tokens in the release version (Helio passes it as release_version), so no variant needs a
+# new commit:
+#   -tailfail   verify fails AFTER the verified production deployment (a failed release that deployed production)
+#   -tailsleep  verify sleeps 10 minutes (time to cancel the run after production deployed)
+#   -slow       build sleeps 90 s before producing the artifact (a run that is still executing)
+#   -norunner   build runs on a self-hosted label no runner has (queued for a runner until one is registered)
+#   -timeout    build exceeds its 1-minute timeout-minutes (GitHub ends it)
+#   -noevidence production succeeds without recording deployment evidence (green run without proof)
+#   -wrongenv   production records its deployment against another environment (evidence on the wrong environment)
+name: bm-fx-pm
+run-name: ${{ inputs.helio_execution_id || github.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      helio_execution_id:
+        type: string
+        required: false
+        default: ''
+      helio_release_id:
+        type: string
+        required: false
+        default: ''
+      workflow_revision:
+        type: string
+        required: false
+        default: ''
+      release_version:
+        type: string
+        required: false
+        default: ''
+      environment:
+        type: string
+        required: false
+        default: bm-fx-pm-production
+      artifact_digest:
+        type: string
+        required: false
+        default: ''
+      deployment_only:
+        type: string
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: bm-fx-pm-${{ inputs.helio_execution_id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ inputs.deployment_only != 'true' }}
+    runs-on: ${{ fromJSON(contains(inputs.release_version, '-norunner') && '["self-hosted","bm-fx-no-runner"]' || '"ubuntu-latest"') }}
+    timeout-minutes: ${{ contains(inputs.release_version, '-timeout') && 1 || 10 }}
+    outputs:
+      artifact_digest: ${{ steps.artifact.outputs.digest }}
+    steps:
+      - name: Build the synthetic artifact
+        id: artifact
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_VERSION" in *-timeout*) sleep 150 ;; esac
+          case "$RELEASE_VERSION" in *-slow*) sleep 90 ;; esac
+          python3 - <<'PY'
+          import hashlib, json, os
+          body = json.dumps({"application": "bm-fx-pm", "version": os.environ["RELEASE_VERSION"],
+                             "commit": os.environ["GITHUB_SHA"]}, sort_keys=True).encode()
+          digest = "sha256:" + hashlib.sha256(body).hexdigest()
+          open(os.environ["GITHUB_OUTPUT"], "a").write(f"digest={digest}\n")
+          print("artifact", digest)
+          PY
+
+  production:
+    needs: build
+    if: ${{ always() && (needs.build.result == 'success' || (inputs.deployment_only == 'true' && needs.build.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: bm-fx-pm-production
+    steps:
+      - name: Install the artifact and record deployment evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ONLY: ${{ inputs.deployment_only }}
+          PINNED_DIGEST: ${{ inputs.artifact_digest }}
+          BUILT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
+          HELIO_EXECUTION_ID: ${{ inputs.helio_execution_id }}
+          HELIO_RELEASE_ID: ${{ inputs.helio_release_id }}
+          WORKFLOW_REVISION: ${{ inputs.workflow_revision }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_VERSION" in *-noevidence*) echo "variant -noevidence: deployed, no evidence recorded"; exit 0 ;; esac
+          target=bm-fx-pm-production
+          case "$RELEASE_VERSION" in *-wrongenv*) target=bm-fx-hm-test ;; esac
+          export TARGET="$target"
+          python3 - <<'PY'
+          import json, os, re, uuid
+          rollback = os.environ["DEPLOYMENT_ONLY"] == "true"
+          digest = os.environ["PINNED_DIGEST"] if rollback else os.environ["BUILT_DIGEST"]
+          assert re.fullmatch(r"sha256:[0-9a-f]{64}", digest), "a sha256 artifact digest is required"
+          if os.environ["HELIO_EXECUTION_ID"]:
+              assert re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", os.environ["HELIO_EXECUTION_ID"])
+              assert os.environ["WORKFLOW_REVISION"] == os.environ["GITHUB_SHA"], "workflow_revision must equal the executing commit"
+          if os.environ["HELIO_RELEASE_ID"]:
+              uuid.UUID(os.environ["HELIO_RELEASE_ID"])
+          payload = {"schema_version": 1, "helio_execution_id": os.environ["HELIO_EXECUTION_ID"],
+                     "artifact_digest": digest, "artifact_uri": "urn:bm-fx-pm@" + digest,
+                     "rollback_workflow_id": ".github/workflows/bm-fx-pm.yml",
+                     "workflow_revision": os.environ["WORKFLOW_REVISION"] or os.environ["GITHUB_SHA"]}
+          if os.environ["HELIO_RELEASE_ID"]:
+              payload["release_id"] = os.environ["HELIO_RELEASE_ID"]
+          json.dump({"ref": os.environ["GITHUB_SHA"], "auto_merge": False, "required_contexts": [],
+                     "environment": os.environ["TARGET"], "task": "helio-rollback" if rollback else "helio-forward-release",
+                     "payload": payload}, open("deployment-evidence.json", "w"))
+          print("installing", digest, "rollback" if rollback else "forward", "on", os.environ["TARGET"])
+          PY
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          deployment_id="$(curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$api/deployments" --data @deployment-evidence.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')"
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$api/deployments/$deployment_id/statuses" --data '{"state":"success","description":"Synthetic artifact installed; digest recorded"}' > /dev/null
+
+  verify:
+    needs: production
+    if: ${{ inputs.deployment_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Post-deployment verification
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_VERSION" in *-tailsleep*) echo "variant -tailsleep: waiting to be cancelled"; sleep 600 ;; esac
+          case "$RELEASE_VERSION" in *-tailfail*) echo "variant -tailfail: verification failed after deployment"; exit 1 ;; esac
+          echo "verification passed"
