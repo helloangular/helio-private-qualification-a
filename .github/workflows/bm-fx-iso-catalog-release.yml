@@ -1,0 +1,22 @@
+name: bm-fx-iso-catalog-release
+run-name: ${{ inputs.helio_execution_id || format('BM fx iso catalog release {0}', github.sha) }}
+# BlueMatrix fx follow-up isolated catalog caller (adapted from the VPS QA lane). Calls the central template by its full name.
+on:
+  workflow_dispatch:
+    inputs:
+      helio_execution_id:
+        type: string
+        required: false
+        default: ''
+      helio_target_environment:
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  deploy:
+    uses: jquantum-helio-qa/helio-private-qualification-a/.github/workflows/bm-fx-iso-catalog-deploy.yml@main
+    with:
+      helio_execution_id: ${{ inputs.helio_execution_id || '' }}
+      helio_target_environment: ${{ inputs.helio_target_environment || '' }}
