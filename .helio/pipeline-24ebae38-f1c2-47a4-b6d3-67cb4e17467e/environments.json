@@ -1,0 +1,57 @@
+{
+  "schema" : 4,
+  "repository" : "jquantum-helio-qa/helio-private-qualification-a",
+  "pipeline" : "pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e",
+  "key_id" : "b0f8d760030be77a",
+  "signature" : "1yru/qVfHOJPdopMOpn2YKUg1PiB3rmPvjqW1SskRcdiMBB5uKX2A/VQgNT2l7UCZixyYQN03H7/9yAi9i4fDg==",
+  "redeploy_workflow" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-redeploy.yml",
+  "modes" : {
+    "forward" : {
+      "workflow" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-deploy.yml",
+      "capability" : "build_and_deploy",
+      "jobs" : [ {
+        "job" : "deploy-prod_a",
+        "instance" : "20af283e-35cb-4aba-8533-447130607895"
+      }, {
+        "job" : "deploy-prod_b",
+        "instance" : "a90699ad-2bb8-4e09-b902-3ff0ebea35a3"
+      } ]
+    },
+    "redeploy" : {
+      "workflow" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-redeploy.yml",
+      "capability" : "deploy_only",
+      "jobs" : [ {
+        "job" : "deploy-prod_a",
+        "instance" : "20af283e-35cb-4aba-8533-447130607895"
+      }, {
+        "job" : "deploy-prod_b",
+        "instance" : "a90699ad-2bb8-4e09-b902-3ff0ebea35a3"
+      } ]
+    }
+  },
+  "workflow" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-deploy.yml",
+  "planning_runs_on" : [ "self-hosted", "helio-plan" ],
+  "deploy_one" : ".github/workflows/helio-pipeline-24ebae38-f1c2-47a4-b6d3-67cb4e17467e-deploy-one.yml",
+  "manifest_id" : "mf_2bedf4003eefb160",
+  "version" : 3,
+  "tiers" : [ {
+    "tier" : "production",
+    "instances" : [ {
+      "id" : "20af283e-35cb-4aba-8533-447130607895",
+      "name" : "prod_a",
+      "binding_id" : "6de9036f-9be7-42e3-978e-0b03580c54f9",
+      "binding_version" : 1,
+      "config_hash" : "9d4485dc9032b46b6fce538b932a3e17caf23133914f60b7b89b86fdda44b439",
+      "runs_on" : [ "ubuntu-latest" ],
+      "gate_mode" : "provider_observed"
+    }, {
+      "id" : "a90699ad-2bb8-4e09-b902-3ff0ebea35a3",
+      "name" : "prod_b",
+      "binding_id" : "5894fecf-6398-44e6-a0ef-5586c0d9df7b",
+      "binding_version" : 1,
+      "config_hash" : "61e1204b0e7c49a651c6ae2617fd5d16a8e7243c038c3446dc61dd923727e2aa",
+      "runs_on" : [ "ubuntu-latest" ],
+      "gate_mode" : "provider_observed"
+    } ]
+  } ]
+}
