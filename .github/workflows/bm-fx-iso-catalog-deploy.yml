@@ -1,0 +1,83 @@
+name: bm-fx-iso-catalog-deploy
+# BlueMatrix fx follow-up isolated Environment Catalog template (BM-BKO-10, BM-BKO-11), adapted from the VPS QA
+# lane's helio-catalog-deploy-qa.yml. Shape required by Helio (env_catalog/template.clj): one matrix job per stage
+# reading HELIO_ENVIRONMENTS, single-environment targeting for redeploy/rollback. No real deployment.
+# Engineering switch for BM-BKO-11: when the repository variable BM_FX_ISO_FAIL_ENV names a preprod environment, that
+# sibling records a partial step and then fails; the other siblings are unaffected (fail-fast is off).
+on:
+  workflow_call:
+    inputs:
+      helio_execution_id:
+        type: string
+        required: false
+        default: ''
+      helio_target_environment:
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  qa:
+    name: qa (${{ matrix.environment }})
+    if: ${{ vars.HELIO_ENVIRONMENTS != '' && contains(fromJSON(vars.HELIO_ENVIRONMENTS).order, 'qa') && (inputs.helio_target_environment == '' || contains(fromJSON(vars.HELIO_ENVIRONMENTS).qa, inputs.helio_target_environment)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ inputs.helio_target_environment != '' && fromJSON(format('["{0}"]', inputs.helio_target_environment)) || fromJSON(vars.HELIO_ENVIRONMENTS).qa }}
+    environment: ${{ matrix.environment }}
+    runs-on: ${{ fromJSON(vars.HELIO_ENVIRONMENTS).runs_on[matrix.environment] }}
+    timeout-minutes: 10
+    concurrency:
+      group: bm-fx-iso-${{ matrix.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Synthetic deployment
+        shell: bash
+        run: |
+          echo "Synthetic catalog deployment of ${GITHUB_SHA} to ${{ matrix.environment }} (stage qa); no application is deployed."
+          sleep 20
+  preprod:
+    name: preprod (${{ matrix.environment }})
+    needs: [qa]
+    if: ${{ !failure() && !cancelled() && vars.HELIO_ENVIRONMENTS != '' && contains(fromJSON(vars.HELIO_ENVIRONMENTS).order, 'preprod') && (inputs.helio_target_environment == '' || contains(fromJSON(vars.HELIO_ENVIRONMENTS).preprod, inputs.helio_target_environment)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ inputs.helio_target_environment != '' && fromJSON(format('["{0}"]', inputs.helio_target_environment)) || fromJSON(vars.HELIO_ENVIRONMENTS).preprod }}
+    environment: ${{ matrix.environment }}
+    runs-on: ${{ fromJSON(vars.HELIO_ENVIRONMENTS).runs_on[matrix.environment] }}
+    timeout-minutes: 10
+    concurrency:
+      group: bm-fx-iso-${{ matrix.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Synthetic deployment
+        shell: bash
+        run: |
+          echo "Synthetic catalog deployment of ${GITHUB_SHA} to ${{ matrix.environment }} (stage preprod); no application is deployed."
+          sleep 20
+          if [ "${{ vars.BM_FX_ISO_FAIL_ENV }}" = "${{ matrix.environment }}" ]; then
+            echo "Partial point reached on ${{ matrix.environment }}: first half applied; engineering fault now fails this sibling (BM-BKO-11)."
+            exit 1
+          fi
+  production:
+    name: production (${{ matrix.environment }})
+    needs: [preprod]
+    if: ${{ !failure() && !cancelled() && vars.HELIO_ENVIRONMENTS != '' && contains(fromJSON(vars.HELIO_ENVIRONMENTS).order, 'production') && (inputs.helio_target_environment == '' || contains(fromJSON(vars.HELIO_ENVIRONMENTS).production, inputs.helio_target_environment)) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ inputs.helio_target_environment != '' && fromJSON(format('["{0}"]', inputs.helio_target_environment)) || fromJSON(vars.HELIO_ENVIRONMENTS).production }}
+    environment: ${{ matrix.environment }}
+    runs-on: ${{ fromJSON(vars.HELIO_ENVIRONMENTS).runs_on[matrix.environment] }}
+    timeout-minutes: 10
+    concurrency:
+      group: bm-fx-iso-${{ matrix.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Synthetic deployment
+        shell: bash
+        run: |
+          echo "Synthetic catalog deployment of ${GITHUB_SHA} to ${{ matrix.environment }} (stage production); no application is deployed."
+          sleep 20
